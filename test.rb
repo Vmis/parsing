@@ -3,47 +3,67 @@ require 'nokogiri'
 require 'csv'
 
 
-    # Вводим наш адрес для парсинга
-    # Вводим имя файла  в который сохраним информацию
+    # Enter website address
+    # http://www.viovet.co.uk/Pet_Foods_Diets-Dogs-Hills_Pet_Nutrition-Hills_Prescription_Diets/c233_234_2678_93/category.html
+    # Enter file name .csv
+    
+    #    First argument
     my_link = ARGV.first
+    
+    #    Last argument
     file_name = ARGV.last
     
+    #    Nokogiri read the my_link into a doc
 	doc = Nokogiri::HTML(open(my_link))
-	l = doc.xpath('//li[@class = "grid-box _one-quarter _centered _no-margin _family-listing-grid-item"]/a[@class = "grid-box _one-whole _no-padding _no-margin"]').map { |link| link['href'] }
-    link = l.map { |i| "https://www.viovet.co.uk" + i} 
+	
+	#    Extract links to products 
+	short_links = doc.xpath('//li[@class = "grid-box _one-quarter _centered _no-margin _family-listing-grid-item"]/a[@class = "grid-box _one-whole _no-padding _no-margin"]').map { |link| link['href'] }
+    
+    #    Add name site for links
+    links = short_links.map { |i| "https://www.viovet.co.uk" + i} 
 
-    # создаем файл CSV
+    #    Create file .csv
     CSV.open(file_name, "w") do |csv|
-    # Добавляем названия колонок    
+    
+    #    Add name column our csv   
     csv << ['Название', 'Цена', 'Изображение', 'Срок доставки', 'Код товара']
-    link.each do |i|
-        
-   	#-------------разбор одной страницы
-	page = Nokogiri::HTML(open( "#{i.to_s}"))
+    
+    #    Get product in one page
+    links.each do |one_link|
+	page = Nokogiri::HTML(open( "#{one_link}"))
 
-	#--------------Название товара
+	#    Get product family heading
 	product = page.xpath('//h1[@id="product_family_heading"]').text
 	
-	#--------------Полное название товара
-    product_name = page.xpath('//li/span[@class="name"]').map { |name|  "#{product} - #{name.text.gsub("\n","")}" }
+	#    Get full name of product
+    product_name = page.xpath('//li/span[@class="name"]').map { |name|  "#{product} - #{name.text.strip.tr("\n"," ")}" }
+ 
+	#    Get price of product
+    product_cost = 	page.xpath('//li/span[@class="price"]').map { |cost|  cost.text.strip}
+	
+	#    Get img by number 
+    product_img = page.xpath('//ul/li/@data-product_image').map {|numb| page.xpath("//img[@id='product_image_#{numb}']/@src").text }
     
-	#--------------Цена товара
-    product_cost = 	page.xpath('//li/span[@class="price"]').map { |cost|  cost.text.gsub("\n","")}
+    #    Get other img (without a number) 
+    product_img.map! {|i| if i == "" then page.xpath('//img[@id="category_image"]/@src')  else i end }
+    
+    #    Add https: for links to imgs
+    product_img.map! {|i| "https:#{i}" }
+ 
+	#    Get estimated delivery time
+    product_deiver = page.xpath('//div/p[@class="stock-notification notification_in-stock"]').map {|delivery| delivery.text.strip }
 	
-	#---Собираем номера изображений для каждого продукта на странице и собираем сами изображения по определенным номерам
-    product_img = page.xpath('//ul/li/@data-product_image').map {|a| page.xpath("//img[@id='product_image_#{a}']/@src").map {|b| "https:#{b}".to_s } }
+	#    Get product code
+    product_cod = page.xpath('//span/span[@class="item-code"]').map { |cod| cod.text.strip }
 	
-	#--------------Срок доставки
-    product_deiver = page.xpath('//div/p[@class="stock-notification notification_in-stock"]').map {|deliver| deliver.text.gsub("\n","") }
-	
-	#--------------Код товара
-    product_cod = page.xpath('//span/span[@class="item-code"]').map { |cod| cod.text.gsub("\n","") }
-	
-	# собираем строку с информацией о продукте
-    full_info = [product_name, product_cost, product_img, product_deiver, product_cod ]
+	#    Count product on the page
+	product_cod.count.times do |i|
+		
+	#    Collect full product information
+    full_info = [product_name[i], product_cost[i], product_img[i], product_deiver[i], product_cod[i] ]
 
-    # пишем собранные данные в наш файл
-    csv << full_info
-
+    #    Save pproduct to file 
+    csv << full_info	
+	end
    end
   end
